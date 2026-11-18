@@ -1,5 +1,7 @@
 from models import Workflow
 
+from state_manager import invalidate_step
+
 
 def get_downstream_steps(workflow: Workflow, step_name: str) -> list[str]:
     affected = []
@@ -18,5 +20,13 @@ def get_downstream_steps(workflow: Workflow, step_name: str) -> list[str]:
             if current in step.dependencies and name not in visited:
                 affected.append(name)
                 queue.append(name)
+
+    return affected
+
+def invalidate_downstream_steps(workflow, step_name):
+    affected = get_downstream_steps(workflow, step_name)
+
+    for name in affected:
+        invalidate_step(workflow, name)
 
     return affected
