@@ -6,6 +6,10 @@ from dependency_manager import get_downstream_steps
 from models import StepStatus
 from dependency_manager import invalidate_downstream_steps
 
+from dependency_manager import can_execute_step
+from models import StepStatus
+
+
 class TestDependencyManager(unittest.TestCase):
 
     def setUp(self):
@@ -64,5 +68,92 @@ class TestDependencyManager(unittest.TestCase):
                 StepStatus.INVALIDATED
             )
 
+    def test_step_blocked_when_dependency_is_incomplete(self):
+    
+        self.workflow.steps["retrieve_inventory"].status = (
+            StepStatus.COMPLETED
+        )
+
+        self.workflow.steps["calculate_plan"].status = (
+            StepStatus.COMPLETED
+        )
+
+        self.workflow.steps["reserve_inventory"].status = (
+            StepStatus.OUTCOME_UNKNOWN
+        )
+
+        self.assertFalse(
+            can_execute_step(
+                self.workflow,
+                "generate_shipping_label"
+            )
+        )
+
+
+    def test_step_can_execute_when_dependencies_are_completed(self):
+
+        self.workflow.steps["retrieve_inventory"].status = (
+            StepStatus.COMPLETED
+        )
+
+        self.workflow.steps["calculate_plan"].status = (
+            StepStatus.COMPLETED
+        )
+
+        self.workflow.steps["reserve_inventory"].status = (
+            StepStatus.COMPLETED
+        )
+
+        self.assertTrue(
+            can_execute_step(
+                self.workflow,
+                "generate_shipping_label"
+            )
+        )
+
+
+    def test_step_blocked_when_dependency_is_incomplete(self):
+   
+
+        self.workflow.steps["retrieve_inventory"].status = (
+            StepStatus.COMPLETED
+        )
+
+        self.workflow.steps["calculate_plan"].status = (
+            StepStatus.COMPLETED
+        )
+
+        self.workflow.steps["reserve_inventory"].status = (
+            StepStatus.OUTCOME_UNKNOWN
+        )
+
+        self.assertFalse(
+            can_execute_step(
+                self.workflow,
+                "generate_shipping_label"
+            )
+        )
+
+
+    def test_step_can_execute_when_dependencies_are_completed(self):
+
+        self.workflow.steps["retrieve_inventory"].status = (
+            StepStatus.COMPLETED
+        )
+
+        self.workflow.steps["calculate_plan"].status = (
+            StepStatus.COMPLETED
+        )
+
+        self.workflow.steps["reserve_inventory"].status = (
+            StepStatus.COMPLETED
+        )
+
+        self.assertTrue(
+            can_execute_step(
+                self.workflow,
+                "generate_shipping_label"
+            )
+        )
 if __name__ == "__main__":
     unittest.main()

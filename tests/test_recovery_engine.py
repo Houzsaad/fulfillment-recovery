@@ -3,19 +3,17 @@ import unittest
 
 from workflow import create_workflow
 from models import StepStatus
-from state_manager import mark_outcome_unknown
+from state_manager import mark_outcome_unknown, mark_completed
 from reservation_service import (
     ReservationService,
-    ReservationStatus,
     ReservationTimeout,
 )
 from recovery_engine import (
     get_idempotency_key,
     reconcile_reservation,
+    handle_inventory_version_change,
+    recover_workflow,
 )
-
-from recovery_engine import handle_inventory_version_change
-from models import StepStatus
 
 
 class TestRecoveryEngine(unittest.TestCase):
@@ -29,7 +27,6 @@ class TestRecoveryEngine(unittest.TestCase):
         )
 
     def test_reconcile_successful_reservation_after_timeout(self):
-        # External service succeeds, but our application times out.
         with self.assertRaises(ReservationTimeout):
             self.service.create_reservation(
                 self.key, 2, simulate_timeout=True
@@ -42,13 +39,10 @@ class TestRecoveryEngine(unittest.TestCase):
         )
 
         self.assertEqual(result, "confirmed")
-
         self.assertEqual(
             self.workflow.steps[self.step_name].status,
             StepStatus.COMPLETED
         )
-
-        # The original reservation still exists only once.
         self.assertEqual(len(self.service.reservations), 1)
 
     def test_reconcile_failed_reservation(self):
@@ -63,7 +57,6 @@ class TestRecoveryEngine(unittest.TestCase):
         )
 
         self.assertEqual(result, "failed")
-
         self.assertEqual(
             self.workflow.steps[self.step_name].status,
             StepStatus.FAILED
@@ -77,7 +70,6 @@ class TestRecoveryEngine(unittest.TestCase):
         )
 
         self.assertEqual(result, "not_found")
-
         self.assertEqual(
             self.workflow.steps[self.step_name].status,
             StepStatus.OUTCOME_UNKNOWN
@@ -87,7 +79,7 @@ class TestRecoveryEngine(unittest.TestCase):
         for step in self.workflow.steps.values():
             step.status = StepStatus.COMPLETED
 
-        self.workflow.steps["reserve_inventory"].status = (
+        self.workflow.steps[self.step_name].status = (
             StepStatus.OUTCOME_UNKNOWN
         )
 
@@ -108,9 +100,70 @@ class TestRecoveryEngine(unittest.TestCase):
         )
 
         self.assertEqual(
-            self.workflow.steps["reserve_inventory"].status,
+            self.workflow.steps[self.step_name].status,
             StepStatus.OUTCOME_UNKNOWN
         )
+
+    def test_recovery_after_successful_reservation_timeout(self):
+        with self.assertRaises(ReservationTimeout):
+            self.service.create_reservation(
+                self.key, 2, simulate_timeout=True
+            )
+
+        mark_completed(
+            self.workflow, "retrieve_inventory", {"stock": 50}
+        )
+        mark_completed(
+            self.workflow, "calculate_plan", {"quantity": 2}
+        )
+        mark_outcome_unknown(self.workflow, self.step_name)
+
+        result = recover_workflow(
+            self.workflow, self.service, 17
+        )
+
+        self.assertEqual(
+            self.workflow.steps[self.step_name].status,
+            StepStatus.COMPLETED
+        )
+        self.assertEqual(
+            result["ready_steps"],
+            ["generate_shipping_label"]
+        )
+        self.assertEqual(result["unresolved_steps"], [])
+
+    def test_recovery_after_inventory_version_change(self):
+        with self.assertRaises(ReservationTimeout):
+            self.service.create_reservation(
+                self.key, 2, simulate_timeout=True
+            )
+
+        mark_completed(
+            self.workflow, "retrieve_inventory", {"stock": 50}
+        )
+        mark_completed(
+            self.workflow, "calculate_plan", {"quantity": 2}
+        )
+        mark_outcome_unknown(self.workflow, self.step_name)
+
+        result = recover_workflow(
+            self.workflow, self.service, 18
+        )
+
+        self.assertEqual(self.workflow.inventory_version, 18)
+        self.assertEqual(
+            self.workflow.steps[self.step_name].status,
+            StepStatus.COMPLETED
+        )
+        self.assertEqual(
+            result["ready_steps"],
+            ["retrieve_inventory"]
+        )
+        self.assertNotIn(
+            "generate_shipping_label",
+            result["ready_steps"]
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,6 +2,7 @@ from models import Workflow
 
 from state_manager import invalidate_step
 
+from models import Workflow, StepStatus
 
 def get_downstream_steps(workflow: Workflow, step_name: str) -> list[str]:
     affected = []
@@ -30,3 +31,17 @@ def invalidate_downstream_steps(workflow, step_name):
         invalidate_step(workflow, name)
 
     return affected
+
+def can_execute_step(workflow, step_name):
+    step = workflow.steps[step_name]
+
+    for dependency_name in step.dependencies:
+        dependency = workflow.steps[dependency_name]
+
+        if dependency.status != StepStatus.COMPLETED:
+            return False
+
+        if not can_execute_step(workflow, dependency_name):
+            return False
+
+    return True

@@ -1,7 +1,7 @@
 from models import StepStatus
 from reservation_service import ReservationStatus
 from state_manager import mark_completed, mark_failed
-
+from dependency_manager import can_execute_step
 from dependency_manager import get_downstream_steps
 from state_manager import invalidate_step
 
@@ -70,3 +70,42 @@ def handle_inventory_version_change(workflow, new_version):
             invalidated.append(name)
 
     return invalidated
+
+def recover_workflow(workflow, service, current_inventory_version):
+    invalidated = handle_inventory_version_change(
+        workflow,
+        current_inventory_version
+    )
+
+    reconciliation = {}
+
+    for name, step in workflow.steps.items():
+        if step.status == StepStatus.OUTCOME_UNKNOWN:
+            if name == "reserve_inventory":
+                reconciliation[name] = reconcile_reservation(
+                    workflow, name, service
+                )
+            else:
+                reconciliation[name] = "manual_review"
+
+    ready_steps = []
+
+    for name, step in workflow.steps.items():
+        if step.status in (
+            StepStatus.PENDING,
+            StepStatus.INVALIDATED
+        ):
+            if can_execute_step(workflow, name):
+                ready_steps.append(name)
+
+    unresolved_steps = [
+        name for name, step in workflow.steps.items()
+        if step.status == StepStatus.OUTCOME_UNKNOWN
+    ]
+
+    return {
+        "invalidated_steps": invalidated,
+        "reconciliation": reconciliation,
+        "ready_steps": ready_steps,
+        "unresolved_steps": unresolved_steps,
+    }
