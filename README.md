@@ -30,7 +30,7 @@ This project implements:
 
 ## Technology
 
-- Python 3.11
+- Python 3.13
 - unittest
 - Git
 - GitHub Actions
