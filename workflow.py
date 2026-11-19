@@ -10,6 +10,7 @@ def create_workflow(workflow_id: str, inventory_version: int) -> Workflow:
     workflow.steps = {
         "retrieve_inventory": WorkflowStep(
             name="retrieve_inventory",
+            input_version=inventory_version,
         ),
 
         "calculate_plan": WorkflowStep(
