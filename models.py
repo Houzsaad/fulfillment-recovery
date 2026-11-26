@@ -10,11 +10,17 @@ class StepStatus(Enum):
     OUTCOME_UNKNOWN = "outcome_unknown"
     INVALIDATED = "invalidated"
 
+class ResultValidity(Enum):
+    VALID = "valid"
+    STALE = "stale"
+    UNKNOWN = "unknown"
+
 @dataclass
 class WorkflowStep:
     name: str
     status: StepStatus = StepStatus.PENDING
     dependencies: list[str] = field(default_factory=list)
+    validity: ResultValidity = ResultValidity.VALID
     input_version: int | None = None
     output: Any = None
 

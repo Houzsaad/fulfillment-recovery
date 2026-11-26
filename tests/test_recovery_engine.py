@@ -1,8 +1,7 @@
-
 import unittest
 
 from workflow import create_workflow
-from models import StepStatus
+from models import StepStatus, ResultValidity
 from state_manager import mark_outcome_unknown, mark_completed
 from reservation_service import (
     ReservationService,
@@ -78,9 +77,13 @@ class TestRecoveryEngine(unittest.TestCase):
     def test_inventory_version_change_invalidates_stale_steps(self):
         for step in self.workflow.steps.values():
             step.status = StepStatus.COMPLETED
+            step.validity = ResultValidity.VALID
 
-        self.workflow.steps[self.step_name].status = (
+        self.workflow.steps["reserve_inventory"].status = (
             StepStatus.OUTCOME_UNKNOWN
+        )
+        self.workflow.steps["reserve_inventory"].validity = (
+            ResultValidity.UNKNOWN
         )
 
         invalidated = handle_inventory_version_change(
@@ -94,13 +97,24 @@ class TestRecoveryEngine(unittest.TestCase):
             {
                 "retrieve_inventory",
                 "calculate_plan",
+                "reserve_inventory",
                 "generate_shipping_label",
                 "notify_customer",
             }
         )
 
         self.assertEqual(
-            self.workflow.steps[self.step_name].status,
+            self.workflow.steps["retrieve_inventory"].validity,
+            ResultValidity.STALE
+        )
+
+        self.assertEqual(
+            self.workflow.steps["retrieve_inventory"].status,
+            StepStatus.COMPLETED
+        )
+
+        self.assertEqual(
+            self.workflow.steps["reserve_inventory"].status,
             StepStatus.OUTCOME_UNKNOWN
         )
 

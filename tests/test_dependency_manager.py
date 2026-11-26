@@ -3,11 +3,10 @@ import unittest
 from workflow import create_workflow
 from dependency_manager import get_downstream_steps
 
-from models import StepStatus
 from dependency_manager import invalidate_downstream_steps
 
 from dependency_manager import can_execute_step
-from models import StepStatus
+from models import StepStatus, ResultValidity
 
 
 class TestDependencyManager(unittest.TestCase):
@@ -64,9 +63,9 @@ class TestDependencyManager(unittest.TestCase):
 
         for name in affected:
             self.assertEqual(
-                self.workflow.steps[name].status,
-                StepStatus.INVALIDATED
-            )
+                self.workflow.steps[name].validity,
+            ResultValidity.STALE
+        )
 
     def test_step_blocked_when_dependency_is_incomplete(self):
     
