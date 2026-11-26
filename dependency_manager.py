@@ -1,8 +1,6 @@
-from models import Workflow
-
 from state_manager import invalidate_step
 
-from models import Workflow, StepStatus
+from models import Workflow, StepStatus, ResultValidity
 
 def get_downstream_steps(workflow: Workflow, step_name: str) -> list[str]:
     affected = []
@@ -39,6 +37,9 @@ def can_execute_step(workflow, step_name):
         dependency = workflow.steps[dependency_name]
 
         if dependency.status != StepStatus.COMPLETED:
+            return False
+
+        if dependency.validity != ResultValidity.VALID:
             return False
 
         if not can_execute_step(workflow, dependency_name):
