@@ -1,9 +1,16 @@
-from models import StepStatus
+
+from models import StepStatus, ResultValidity
 from reservation_service import ReservationStatus
-from state_manager import mark_completed, mark_failed
-from dependency_manager import can_execute_step
-from dependency_manager import get_downstream_steps
-from state_manager import invalidate_step
+from state_manager import (
+    mark_completed,
+    mark_failed,
+    invalidate_step,
+)
+from dependency_manager import (
+    can_execute_step,
+    get_downstream_steps,
+)
+
 
 def get_idempotency_key(workflow, step_name):
     return f"{workflow.workflow_id}:{step_name}"
@@ -16,7 +23,6 @@ def reconcile_reservation(workflow, step_name, service):
         raise ValueError("Step does not have an uncertain outcome.")
 
     key = get_idempotency_key(workflow, step_name)
-
     reservation = service.get_reservation(key)
 
     if reservation is None:
@@ -30,7 +36,7 @@ def reconcile_reservation(workflow, step_name, service):
                 "idempotency_key": key,
                 "quantity": reservation.quantity,
                 "status": reservation.status.value,
-            }
+            },
         )
         return "confirmed"
 
@@ -46,7 +52,6 @@ def handle_inventory_version_change(workflow, new_version):
         return []
 
     workflow.inventory_version = new_version
-
     affected = set()
 
     for name, step in workflow.steps.items():
@@ -59,22 +64,20 @@ def handle_inventory_version_change(workflow, new_version):
                 get_downstream_steps(workflow, name)
             )
 
-    # Never erase the record of an external reservation.
-    protected_steps = {"reserve_inventory"}
-
     invalidated = []
 
     for name in workflow.steps:
-        if name in affected and name not in protected_steps:
+        if name in affected:
             invalidate_step(workflow, name)
             invalidated.append(name)
 
     return invalidated
 
+
 def recover_workflow(workflow, service, current_inventory_version):
     invalidated = handle_inventory_version_change(
         workflow,
-        current_inventory_version
+        current_inventory_version,
     )
 
     reconciliation = {}
@@ -91,15 +94,25 @@ def recover_workflow(workflow, service, current_inventory_version):
     ready_steps = []
 
     for name, step in workflow.steps.items():
-        if step.status in (
-            StepStatus.PENDING,
-            StepStatus.INVALIDATED
+        if step.status == StepStatus.OUTCOME_UNKNOWN:
+            continue
+
+        if name == "reserve_inventory" and step.validity == ResultValidity.STALE:
+            continue
+
+        if (
+            step.status in (
+                StepStatus.PENDING,
+                StepStatus.INVALIDATED,
+            )
+            or step.validity == ResultValidity.STALE
         ):
             if can_execute_step(workflow, name):
                 ready_steps.append(name)
 
     unresolved_steps = [
-        name for name, step in workflow.steps.items()
+        name
+        for name, step in workflow.steps.items()
         if step.status == StepStatus.OUTCOME_UNKNOWN
     ]
 

@@ -1,7 +1,7 @@
 import unittest
 
 from workflow import create_workflow
-from models import StepStatus
+from models import StepStatus, ResultValidity
 from state_manager import (
     mark_running,
     mark_completed,
@@ -42,18 +42,19 @@ class TestStateManager(unittest.TestCase):
         )
 
     def test_invalidate_step(self):
+        step = self.workflow.steps["retrieve_inventory"]
+
         mark_completed(
             self.workflow,
-            "calculate_plan",
-            {"quantity": 2}
+            "retrieve_inventory",
+            {"stock": 50}
         )
 
-        invalidate_step(self.workflow, "calculate_plan")
+        invalidate_step(self.workflow, "retrieve_inventory")
 
-        step = self.workflow.steps["calculate_plan"]
-
-        self.assertEqual(step.status, StepStatus.INVALIDATED)
-        self.assertIsNone(step.output)
+        self.assertEqual(step.status, StepStatus.COMPLETED)
+        self.assertEqual(step.validity, ResultValidity.STALE)
+        self.assertEqual(step.output, {"stock": 50})
 
 
 if __name__ == "__main__":
